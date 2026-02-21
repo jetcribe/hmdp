@@ -45,13 +45,12 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     @Override
     public Result queryById(Long id) {
         //缓存穿透
-//        Shop shop = queryWithPassThrough(id);
-//        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+        Shop shop = cacheClient.queryWithPassThrough(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
         //互斥锁解决缓存击穿
 //        Shop shop = queryWithMutex(id);
         //逻辑过期解决缓存击穿
 //        Shop shop = queryWithLogicalExpire(id);
-        Shop shop = cacheClient.queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
+//        Shop shop = cacheClient.queryWithLogicalExpire(CACHE_SHOP_KEY, id, Shop.class, this::getById, CACHE_SHOP_TTL, TimeUnit.MINUTES);
         if (shop == null) {
             return Result.fail("店铺不存在");
         }
@@ -73,7 +72,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             //存在直接返回
             return JSONUtil.toBean(shopJson, Shop.class);
         }
-        //判断控值
+        //判断空值
         if ("".equals(shopJson)) {
             return null;
         }
@@ -188,12 +187,15 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         return shop;
     }*/
     @Override
+    //发生异常即回滚
+    //@Transactional：声明式事务管理（保证方法中数据库操作全部成功或全部失败，避免数据不一致）
     @Transactional(rollbackFor = Exception.class)
     public Result update(Shop shop) {
         Long id = shop.getId();
         if (id == null) {
             return Result.fail("id不能为空");
         }
+        //先更新数据库，再删除缓存 - 解决缓存不一致问题（可能导致脏读）
         //更新数据库
         updateById(shop);
         //删除缓存
@@ -218,8 +220,8 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         String key= SHOP_GEO_KEY+typeId;
         GeoResults<RedisGeoCommands.GeoLocation<String>> results = stringRedisTemplate.opsForGeo()
                 .search(key
-                        , GeoReference.fromCoordinate(x, y)
-                        , new Distance(5000)
+                        , GeoReference.fromCoordinate(x, y)//中心点坐标
+                        , new Distance(5000) //搜索半径
                         , RedisGeoCommands.GeoSearchCommandArgs.newGeoSearchArgs().includeDistance().limit(end)
                 );
         //解析出id
@@ -233,6 +235,7 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
         }
         //截取
         List<Long> ids=new ArrayList<>(content.size());
+        //id，距离
         Map<String,Distance> distanceMap=new HashMap<>();
         content.stream().skip(from).forEach(result->{
             //店铺id
@@ -242,8 +245,9 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
             Distance distance = result.getDistance();
             distanceMap.put(shopId,distance);
         });
-        //根据id查询shop
+        //根据id查询shop list->string
         String join = StrUtil.join(",", ids);
+        //查询，并保持距离排序
         List<Shop> shopList = lambdaQuery().in(Shop::getId, ids).last("order by field(id,"+join+")").list();
         for (Shop shop : shopList) {
             shop.setDistance(distanceMap.get(shop.getId().toString()).getValue());

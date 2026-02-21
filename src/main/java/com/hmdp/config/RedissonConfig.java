@@ -25,7 +25,10 @@ public class RedissonConfig {
     public RedissonClient redissonClient(){
         //配置
         Config config=new Config();
-        config.useSingleServer().setAddress("redis://"+host+":"+port).setPassword(password);
+        config.useSingleServer().setAddress("redis://"+host+":"+port);
+        if (password != null && !password.isEmpty()) {
+            config.useSingleServer().setPassword(password);
+        }
         //创建对并且返回
         return Redisson.create(config);
     }

@@ -12,15 +12,23 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 简单的redis分布式锁
- *
+ * 可以锁住多个服务器上的线程,保证分布式环境下的互斥访问
+ * 分布式锁特征：1.锁存储在Redis中，所有服务器共享；
+ * 2.使用SET NX EX命令实现互斥（NX: 只在key不存在时设置（互斥），EX 10: 设置过期时间10秒（防止死锁））；
+ * 3.使用线程标识防止误删（每个线程有唯一的标识，防止误删其他线程的锁）
+ * 4.使用Lua脚本释放锁，保证原子性
+ * 常用场境：秒杀商品、缓存重建
  * @author CHEN
  * @date 2022/10/09
  */
 public class SimpleRedisLock implements ILock {
     private String name;
     private StringRedisTemplate stringRedisTemplate;
+    //锁的key前缀
     private static final String KET_PREFIX="lock:";
+    //线程标识前缀
     private static final String ID_PREFIX= UUID.randomUUID().toString(true)+"-";
+    //lua脚本 释放锁 - 避免误删其他线程的锁，保证原子性
     private static final DefaultRedisScript<Long> UNLOCK_SCRIPT;
 
     static {
@@ -60,6 +68,7 @@ public class SimpleRedisLock implements ILock {
             stringRedisTemplate.delete(KET_PREFIX + name);
         }*/
         //使用lua脚本保证操作原子性
+        //整个Lua脚本作为一个原子操作执行在执行过程中，不会被其他命令打断
         stringRedisTemplate.execute(UNLOCK_SCRIPT
                 , Collections.singletonList(KET_PREFIX+name)
                 ,ID_PREFIX+Thread.currentThread().getId());

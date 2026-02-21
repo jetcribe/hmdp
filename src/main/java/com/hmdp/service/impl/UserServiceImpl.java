@@ -84,6 +84,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
             return Result.fail("验证码错误");
         }
         //一致 根据手机号查询用户
+        //MyBatisPlus用法查询用户
         User user = baseMapper
                 .selectOne(new LambdaQueryWrapper<User>()
                         .eq(User::getPhone, phone));
@@ -97,9 +98,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         //生成token
         String token = UUID.randomUUID().toString(true);
         //userDTO转map
+        //属性复制
         UserDTO userDTO = BeanUtil.copyProperties(user, UserDTO.class);
+        //对象转map
         Map<String, Object> map = BeanUtil.beanToMap(userDTO, new HashMap<>()
                 , CopyOptions.create().setIgnoreNullValue(true)
+                //变换字段值格式（int->string）
                         .setFieldValueEditor(
                                 (name, value) -> value.toString()
                         ));
@@ -121,7 +125,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
         String key = USER_SIGN_KEY +yyyyMM+ id;
         //获取今天是本月的第几天
         int dayOfMonth = now.getDayOfMonth();
-        //写了redis
+        //使用Redis BitMap设置签到位
+        //将第dayOfMonth-1位 置1
         stringRedisTemplate.opsForValue().setBit(key,dayOfMonth-1,true);
         return Result.ok();
     }

@@ -80,7 +80,7 @@ public class RedisTest {
         List<Shop> list = shopService.list();
         //分组
         Map<Long, List<Shop>> map = list.stream().collect(Collectors.groupingBy(Shop::getTypeId));
-        //分批写入
+        //分组写入
         for (Map.Entry<Long, List<Shop>> longListEntry : map.entrySet()) {
             //获取类型id
             Long typeId = longListEntry.getKey();

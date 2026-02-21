@@ -157,7 +157,7 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
         if (typedTuples==null||typedTuples.isEmpty()){
             return Result.ok();
         }
-        //解析数据 blogId minTime offset
+        //解析数据 blogId minTime（分页时间戳） offset（分页偏移量）
         List<Long> ids=new ArrayList<>(typedTuples.size());
         long minTime =0;
         int os=1;
@@ -173,12 +173,13 @@ public class BlogServiceImpl extends ServiceImpl<BlogMapper, Blog> implements IB
                 os=1;
             }
         }
-        //根据 查询blog
+        //根据id查询blog
         List<Blog> blogs=new ArrayList<>(ids.size());
         for (Long id : ids) {
             Blog blog = getById(id);
             blogs.add(blog);
         }
+        //判断当前用户是否点赞
         blogs.forEach(this::isBlogLiked);
         //封装 返回
         ScrollResult scrollResult = new ScrollResult();
